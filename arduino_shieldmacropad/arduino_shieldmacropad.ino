@@ -11,15 +11,17 @@ void setup() {
   for (int i = 0; i < 6; i++) {
     pinMode(PIN_SWITCH[i], INPUT_PULLUP);
   }
-
+  delay(100);
   Keyboard.begin();
 }
 
 void loop() {
+  static long encoder1_position = 0;
+  static long encoder2_position = 0;
   encoder1.tick();
   encoder2.tick();
 
-  int dir1 = (int)encoder1.getDirection();
+  int dir1 = encoder1.getPosition() - encoder1_position;
   if (dir1 > 0) {
     Keyboard.press('l');
     Keyboard.release('l');
@@ -27,7 +29,9 @@ void loop() {
     Keyboard.press('r');
     Keyboard.release('r');
   }
-  int dir2 = (int)encoder2.getDirection();
+  encoder1_position = encoder1.getPosition();
+
+  int dir2 = encoder2.getPosition() - encoder2_position;
   if (dir2 > 0) {
     Keyboard.press('L');
     Keyboard.release('L');
@@ -35,35 +39,30 @@ void loop() {
     Keyboard.press('R');
     Keyboard.release('R');
   }
+  encoder2_position = encoder2.getPosition();
 
   if (digitalRead(PIN_SWITCH[0]) == LOW) {
     Keyboard.press('1');
-  } else {
     Keyboard.release('1');
   }
   if (digitalRead(PIN_SWITCH[1]) == LOW) {
     Keyboard.press('2');
-  } else {
     Keyboard.release('2');
   }
   if (digitalRead(PIN_SWITCH[2]) == LOW) {
     Keyboard.press('3');
-  } else {
     Keyboard.release('3');
   }
   if (digitalRead(PIN_SWITCH[3]) == LOW) {
     Keyboard.press('4');
-  } else {
     Keyboard.release('4');
   }
   if (digitalRead(PIN_SWITCH[4]) == LOW) {
     Keyboard.press('5');
-  } else {
     Keyboard.release('5');
   }
   if (digitalRead(PIN_SWITCH[5]) == LOW) {
     Keyboard.press('6');
-  } else {
     Keyboard.release('6');
   }
 }
