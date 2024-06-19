@@ -31,38 +31,44 @@ void loop() {
   }
   encoder1_position = encoder1.getPosition();
 
-  int dir2 = encoder2.getPosition() - encoder2_position;
-  if (dir2 > 0) {
-    Keyboard.press('L');
-    Keyboard.release('L');
-  } else if (dir2 < 0) {
-    Keyboard.press('R');
-    Keyboard.release('R');
-  }
-  encoder2_position = encoder2.getPosition();
+  static unsigned long timer_switch = 0;
 
-  if (digitalRead(PIN_SWITCH[0]) == LOW) {
-    Keyboard.press('1');
-    Keyboard.release('1');
-  }
-  if (digitalRead(PIN_SWITCH[1]) == LOW) {
-    Keyboard.press('2');
-    Keyboard.release('2');
-  }
-  if (digitalRead(PIN_SWITCH[2]) == LOW) {
-    Keyboard.press('3');
-    Keyboard.release('3');
-  }
-  if (digitalRead(PIN_SWITCH[3]) == LOW) {
-    Keyboard.press('4');
-    Keyboard.release('4');
-  }
-  if (digitalRead(PIN_SWITCH[4]) == LOW) {
-    Keyboard.press('5');
-    Keyboard.release('5');
-  }
-  if (digitalRead(PIN_SWITCH[5]) == LOW) {
-    Keyboard.press('6');
-    Keyboard.release('6');
+  if (millis() - timer_switch > 50) {
+    timer_switch = millis();
+
+    int dir2 = encoder2.getPosition() - encoder2_position;
+    if (dir2 > 0) {
+      Keyboard.press('L');
+      Keyboard.release('L');
+    } else if (dir2 < 0) {
+      Keyboard.press('R');
+      Keyboard.release('R');
+    }
+    encoder2_position = encoder2.getPosition();
+
+    if (digitalRead(PIN_SWITCH[0]) == LOW) {
+      Keyboard.press('1');
+      Keyboard.release('1');
+    }
+    if (digitalRead(PIN_SWITCH[1]) == LOW) {
+      Keyboard.press('2');
+      Keyboard.release('2');
+    }
+    if (digitalRead(PIN_SWITCH[2]) == LOW) {
+      Keyboard.press('3');
+      Keyboard.release('3');
+    }
+    if (digitalRead(PIN_SWITCH[3]) == LOW) {
+      Keyboard.press('4');
+      Keyboard.release('4');
+    }
+    if (digitalRead(PIN_SWITCH[4]) == LOW) {
+      Keyboard.press('5');
+      Keyboard.release('5');
+    }
+    if (digitalRead(PIN_SWITCH[5]) == LOW) {
+      Keyboard.press('6');
+      Keyboard.release('6');
+    }
   }
 }
