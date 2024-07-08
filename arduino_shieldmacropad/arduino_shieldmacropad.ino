@@ -1,6 +1,7 @@
 // RotaryEncoder by Matthias Hertel
 #include <RotaryEncoder.h>
 #include <Keyboard.h>
+#include <Mouse.h>
 
 constexpr int PIN_SWITCH[6] = { 4,5,6,7,10,11 };
 
@@ -13,38 +14,57 @@ void setup() {
   }
   delay(100);
   Keyboard.begin();
+  Mouse.begin();
 }
 
 void loop() {
+  process_encoders();
+  process_switches();
+}
+
+
+/// 回転ノブを処理する関数
+void process_encoders() {
   static long encoder1_position = 0;
   static long encoder2_position = 0;
+  static unsigned long timer_encoders = 0;
+
   encoder1.tick();
   encoder2.tick();
 
-  int dir1 = encoder1.getPosition() - encoder1_position;
-  if (dir1 > 0) {
-    Keyboard.press('l');
-    Keyboard.release('l');
-  } else if (dir1 < 0) {
-    Keyboard.press('r');
-    Keyboard.release('r');
-  }
-  encoder1_position = encoder1.getPosition();
+  if (millis() - timer_encoders > 10) {
+    // 10msごとにキー入力に反映する
+    timer_encoders = millis();
 
-  static unsigned long timer_switch = 0;
-
-  if (millis() - timer_switch > 50) {
-    timer_switch = millis();
+    int dir1 = encoder1.getPosition() - encoder1_position;
+    if (dir1 > 0) {
+      Keyboard.press(KEY_LEFT_ARROW);
+      Keyboard.release(KEY_LEFT_ARROW);
+    } else if (dir1 < 0) {
+      Keyboard.press(KEY_RIGHT_ARROW);
+      Keyboard.release(KEY_RIGHT_ARROW);
+    }
+    encoder1_position = encoder1.getPosition();
 
     int dir2 = encoder2.getPosition() - encoder2_position;
     if (dir2 > 0) {
-      Keyboard.press('L');
-      Keyboard.release('L');
+      Mouse.move(0, 0, 4);
     } else if (dir2 < 0) {
-      Keyboard.press('R');
-      Keyboard.release('R');
+      Mouse.move(0, 0, -4);
     }
     encoder2_position = encoder2.getPosition();
+  }
+}
+
+
+/// スイッチを処理する関数（回転ノブの押し込みも含む）
+void process_switches() {
+  static unsigned long timer_switch = 0;
+
+  if (millis() - timer_switch > 50) {
+    // 50msごとに押下状況を確認して、キー入力に反映する
+    timer_switch = millis();
+
 
     if (digitalRead(PIN_SWITCH[0]) == LOW) {
       Keyboard.press('1');
