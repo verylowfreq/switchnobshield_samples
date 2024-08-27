@@ -65,7 +65,10 @@ void setup() {
 
 
 void loop() {
-    if (TinyUSBDevice.mounted()) {
+  // USB通信の処理
+  TinyUSBDevice.task();
+  
+  if (TinyUSBDevice.mounted()) {
         // USBが接続されているとき
 
         led_blink(500);
