@@ -1,4 +1,4 @@
-constexpr int PIN_LED_BUILTIN = PA5;
+
 constexpr int PIN_SWITCH_0 = PA15;
 constexpr int PIN_SWITCH_1 = PB3;
 constexpr int PIN_SWITCH_2 = PB4;
@@ -18,6 +18,10 @@ RotaryEncoder encoder2(PIN_RE2A, PIN_RE2B, RotaryEncoder::LatchMode::FOUR3);
 
 
 #include <Adafruit_TinyUSB.h>
+
+#include <HardwareTimer.h>
+HardwareTimer Timer2(TIM2);
+
 
 // HIDレポートIDの定義。機能ごとにIDを割り振り、1つのUSBエンドポイントで複数のHID機能をやりとりする
 enum {
@@ -46,6 +50,11 @@ typedef enum {
 } STAGE_t;
 
 
+void timer_callback() {
+    encoder1.tick();
+    encoder2.tick();
+}
+
 void setup() {
     // スイッチの入力ピンの初期化。ロータリーエンコーダーのピンはライブラリ側で処理される
     pinMode(PIN_SWITCH_0, INPUT_PULLUP);
@@ -54,6 +63,12 @@ void setup() {
     pinMode(PIN_SWITCH_3, INPUT_PULLUP);
     pinMode(PIN_SWITCH_4, INPUT_PULLUP);
     pinMode(PIN_SWITCH_5, INPUT_PULLUP);
+
+    Timer2.pause();
+    Timer2.setOverflow(500, MICROSEC_FORMAT);
+    Timer2.attachInterrupt(timer_callback);
+    Timer2.refresh();
+    Timer2.resume();
 
     // USB HIDの設定
     usb_hid.setPollInterval(2);
@@ -68,110 +83,97 @@ void loop() {
   // USB通信の処理
   TinyUSBDevice.task();
   
-  if (TinyUSBDevice.mounted()) {
-        // USBが接続されているとき
+  if (!TinyUSBDevice.mounted()) {
+    // パソコンに認識されていないとき
+    led_blink(1000);
 
-        led_blink(500);
+  } else {
+    // USBが接続されているとき
+    led_blink(500);
+    usbhid_task();
+  }
+}
 
-        static STAGE_t stage = 0;
 
-        static long encoder1_position = 0;
-        static long encoder2_position = 0;
+void usbhid_wait_until_ready() {
+    while (!tud_hid_ready()) {
+        yield();
+    }
+}
 
-        // エンコーダーの位置はとりこぼさないように毎回更新する
-        encoder1.tick();
-        encoder2.tick();
 
-        int dir1 = encoder1.getPosition() - encoder1_position;
-        int dir2 = encoder2.getPosition() - encoder2_position;
-        bool switch_1 = digitalRead(PIN_SWITCH_0) == LOW;
-        bool switch_2 = digitalRead(PIN_SWITCH_1) == LOW;
-        bool switch_3 = digitalRead(PIN_SWITCH_2) == LOW;
-        bool switch_4 = digitalRead(PIN_SWITCH_3) == LOW;
-        bool switch_5 = digitalRead(PIN_SWITCH_4) == LOW;
-        bool switch_6 = digitalRead(PIN_SWITCH_5) == LOW;
+void usbhid_task() {
+    static int encoder1_prev_position = 0;
+    static int encoder2_prev_position = 0;
+    int encoder1_position = encoder1.getPosition();
+    int encoder2_position = encoder2.getPosition();
+    int dir1 = encoder1.getPosition() - encoder1_prev_position;
+    int dir2 = encoder2.getPosition() - encoder2_prev_position;
+    bool switch_1 = digitalRead(PIN_SWITCH_0) == LOW;
+    bool switch_2 = digitalRead(PIN_SWITCH_1) == LOW;
+    bool switch_3 = digitalRead(PIN_SWITCH_2) == LOW;
+    bool switch_4 = digitalRead(PIN_SWITCH_3) == LOW;
+    bool switch_5 = digitalRead(PIN_SWITCH_4) == LOW;
+    bool switch_6 = digitalRead(PIN_SWITCH_5) == LOW;
 
-        if (usb_hid.ready()) {
-            // 直前のHIDレポートの送信が完了したら、次のステージを処理する
+    {
+        uint8_t modifiers = 0;
+        uint8_t keycode[6] = { 0 };
+        keycode[0] = switch_1 ? 0x04 : 0x00;
+        keycode[1] = switch_2 ? 0x05 : 0x00;
+        keycode[2] = switch_3 ? 0x06 : 0x00;
+        keycode[3] = switch_4 ? 0x07 : 0x00;
+        keycode[4] = switch_5 ? 0x08 : 0x00;
 
-            switch (stage) {
-                // HIDの機能ごとにHIDレポートを組み立てて、送信する
+        usb_hid.keyboardReport(RID_KEYBOARD, modifiers, keycode);
+    }
 
-                case STAGE_KEYBOARD:
-                    // キーボード
-                    {
-                        uint8_t modifiers = 0;
-                        uint8_t keycode[6] = { 0 };
-                        keycode[0] = switch_1 ? 0x04 : 0x00;
-                        keycode[1] = switch_2 ? 0x05 : 0x00;
-                        keycode[2] = switch_3 ? 0x06 : 0x00;
-                        keycode[3] = switch_4 ? 0x07 : 0x00;
-                        keycode[4] = switch_5 ? 0x08 : 0x00;
+    usbhid_wait_until_ready();
 
-                        usb_hid.keyboardReport(RID_KEYBOARD, modifiers, keycode);
-                    }
-                    stage = (stage + 1) % STAGE_COUNT;
-                    break;
-
-                case STAGE_MOUSE:
-                    // マウス
-                    {
-                        int8_t scroll = 0;
-                        uint8_t pan = 0;
-                        if (dir1 > 0) {
-                            scroll = 4;
-                        } else if (dir1 < 0) {
-                            scroll = -4;
-                        }
-                        
-                        encoder1_position = encoder1.getPosition();
-                        usb_hid.mouseScroll(RID_MOUSE, scroll, pan);
-                    }
-                    stage = (stage + 1) % STAGE_COUNT;
-                    break;
-
-                case STAGE_CONSUMER_1:
-                    // コンシューマーコントロール
-                    {
-                        static unsigned long timer = 0;
-                        // static muteswitch_pressed = false;
-                        if (millis() - timer > 50) {
-                            timer = millis();
-
-                            uint16_t functions = 0;
-                            if (switch_6) {
-                                functions |= HID_USAGE_CONSUMER_MUTE;
-                                // muteswitch_pressed = true;
-                            }
-                            if (dir2 > 0) {
-                                functions |= HID_USAGE_CONSUMER_VOLUME_DECREMENT;
-                            } else if (dir2 < 0) {
-                                functions |= HID_USAGE_CONSUMER_VOLUME_INCREMENT;
-                            }
-                            encoder2_position = encoder2.getPosition();
-
-                            usb_hid.sendReport16(RID_CONSUMER_CONTROL, functions);
-
-                            while (digitalRead(PIN_SWITCH_5) == LOW) { delay(1); }
-                        }
-                        stage = (stage + 1) % STAGE_COUNT;
-                        break;
-                    }
-                
-                case STAGE_CONSUMER_2:  // コンシューマーコントロールをすべて解除する
-                    usb_hid.sendReport16(RID_CONSUMER_CONTROL, 0x0000);
-                    stage = (stage + 1) % STAGE_COUNT;
-                    break;
-
-                default:
-                    stage = STAGE_KEYBOARD;
-            }
+    {
+        int8_t scroll = 0;
+        int8_t pan = 0;
+        if (dir1 > 0) {
+            scroll = 4;
+        } else if (dir1 < 0) {
+            scroll = -4;
         }
+        encoder1_prev_position = encoder1_position;
 
-    } else {
-        // 電源は供給されているがUSBが接続されていないとき（デバッグ用）
+        usb_hid.mouseScroll(RID_MOUSE, scroll, pan);
+    }
 
-        led_blink(1000);
+    usbhid_wait_until_ready();
+
+    {
+        static unsigned long timer = 0;
+        if (millis() - timer > 50) {
+            timer = millis();
+
+            while (digitalRead(PIN_SWITCH_5) == LOW) { delay(1); }
+
+            uint16_t functions = 0;
+            if (switch_6) {
+                functions |= HID_USAGE_CONSUMER_MUTE;
+            }
+            if (dir2 > 0) {
+                functions |= HID_USAGE_CONSUMER_VOLUME_DECREMENT;
+            } else if (dir2 < 0) {
+                functions |= HID_USAGE_CONSUMER_VOLUME_INCREMENT;
+            }
+            encoder2_prev_position = encoder2_position;
+
+
+            usb_hid.sendReport16(RID_CONSUMER_CONTROL, functions);
+            // }
+
+            usbhid_wait_until_ready();
+
+            usb_hid.sendReport16(RID_CONSUMER_CONTROL, 0x0000);
+
+
+            usbhid_wait_until_ready();
+        }
     }
 }
 
@@ -181,13 +183,13 @@ void led_blink(unsigned int interval_ms) {
     static bool led_on = false;
 
     if (timer == 0) {
-        pinMode(PIN_LED_BUILTIN, OUTPUT);
+        pinMode(LED_BUILTIN, OUTPUT);
     }
 
     if (millis() - timer > interval_ms) {
         timer = millis();
         
-        digitalWrite(PIN_LED_BUILTIN, led_on ? LOW : HIGH);
+        digitalWrite(LED_BUILTIN, led_on ? LOW : HIGH);
         led_on = !led_on;
     }
 }
